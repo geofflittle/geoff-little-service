@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+
+  # Defines the top level websocket api
+  MyWebsocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: MyWebsocketApi
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  # Defines a special route for making a websocket connection
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref ConnectIntegration
+
+  # Defines an integration between the connect route and connect lambda
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations
+
+  # Defines a lambda to be invoked on connect
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: connect.handler
+      Runtime: nodejs8.10
+
+  # Defines permissions for executing the connect lambda
+  ConnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - MyWebsocketApi
+      - ConnectFunction
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ConnectFunction
+      Principal: apigateway.amazonaws.com
+
+  # Defines a special route for disconnecting from a websocket
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref DisconnectIntegration
+
+  # Defines an integration between the disconnect route and disconnect lambda
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DisconnectFunction.Arn}/invocations
+
+  # Defines a lambda to be invoked on disconnect
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: disconnect.handler
+      Runtime: nodejs8.10
+
+  # Defines permissions for executing the disconnect lambda
+  DisconnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - MyWebsocketApi
+      - DisconnectFunction
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DisconnectFunction
+      Principal: apigateway.amazonaws.com
+
+  # Defines a hello world route
+  HelloWorldRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+      RouteKey: hello-world
+      AuthorizationType: NONE
+      OperationName: HelloWorldRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref HelloWorldIntegration
+
+  # Defines an integration between the hello world route and hello world lambda
+  HelloWorldIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunction.Arn}/invocations
+
+  # Defines a lambda to be invoked on hitting the hello world route
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: helloWorld.handler
+      Runtime: nodejs8.10
+
+  # Defines permissions for executing the hello world lambda
+  HelloWorldPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - MyWebsocketApi
+      - HelloWorldFunction
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref HelloWorldFunction
+      Principal: apigateway.amazonaws.com
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+      - HelloWorldRoute
+    Properties:
+      ApiId: !Ref MyWebsocketApi
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: v1
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref MyWebsocketApi
+
+Outputs:
+
+  ConnectFunctionArn:
+    Value: !GetAtt ConnectFunction.Arn
+
+  DisconnectFunctionArn:
+    Value: !GetAtt DisconnectFunction.Arn
+
+  HelloWorldFunctionArn:
+    Value: !GetAtt HelloWorldFunction.Arn
+
+  WebSocketURI:
+    Value: !Join [ '', [ 'wss://', !Ref MyWebsocketApi, '.execute-api.',!Ref 'AWS::Region','.amazonaws.com/',!Ref 'Stage'] ]
