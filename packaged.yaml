@@ -1,188 +1,179 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-
 Parameters:
   ConnectionsTableName:
     Type: String
-    Default: "connections"
-
+    Default: connections
 Resources:
-
-  # Defines the top level websocket api
   WordApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
       Name: WordApi
       ProtocolType: WEBSOCKET
       RouteSelectionExpression: $request.body.action
-
-  # Defines a special route for making a websocket connection
   ConnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref WordApi
+      ApiId:
+        Ref: WordApi
       RouteKey: $connect
       AuthorizationType: NONE
       OperationName: ConnectRoute
-      Target: !Join
-        - "/"
-        - - "integrations"
-          - !Ref ConnectIntegration
-
-  # Defines an integration between the connect route and connect lambda
+      Target:
+        Fn::Join:
+        - /
+        - - integrations
+          - Ref: ConnectIntegration
   ConnectIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
-      ApiId: !Ref WordApi
+      ApiId:
+        Ref: WordApi
       IntegrationType: AWS_PROXY
       IntegrationUri:
         Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations
-
-  # Defines a lambda to be invoked on connect
   ConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./dist/connect
+      CodeUri: s3://geoff-little-service/08fdc9b753662de52a939da9e8f0f9d9
       Handler: connect.default
       Runtime: nodejs8.10
       Environment:
         Variables:
-          CONNECTIONS_TABLE_NAME: !Ref ConnectionsTableName
+          CONNECTIONS_TABLE_NAME:
+            Ref: ConnectionsTableName
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ConnectionsTableName
-
-  # Defines permissions for executing the connect lambda
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTableName
   ConnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
-      - WordApi
-      - ConnectFunction
+    - WordApi
+    - ConnectFunction
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref ConnectFunction
+      FunctionName:
+        Ref: ConnectFunction
       Principal: apigateway.amazonaws.com
-
-  # Defines a special route for disconnecting from a websocket
   DisconnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref WordApi
+      ApiId:
+        Ref: WordApi
       RouteKey: $disconnect
       AuthorizationType: NONE
       OperationName: DisconnectRoute
-      Target: !Join
-        - "/"
-        - - "integrations"
-          - !Ref DisconnectIntegration
-
-  # Defines an integration between the disconnect route and disconnect lambda
+      Target:
+        Fn::Join:
+        - /
+        - - integrations
+          - Ref: DisconnectIntegration
   DisconnectIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
-      ApiId: !Ref WordApi
+      ApiId:
+        Ref: WordApi
       IntegrationType: AWS_PROXY
       IntegrationUri:
         Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DisconnectFunction.Arn}/invocations
-
-  # Defines a lambda to be invoked on disconnect
   DisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./dist/disconnect
+      CodeUri: s3://geoff-little-service/73ed88947d1f3a7083214ca6d42c25db
       Handler: disconnect.default
       Runtime: nodejs8.10
       Environment:
         Variables:
-          CONNECTIONS_TABLE_NAME: !Ref ConnectionsTableName
+          CONNECTIONS_TABLE_NAME:
+            Ref: ConnectionsTableName
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ConnectionsTableName
-
-  # Defines permissions for executing the disconnect lambda
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTableName
   DisconnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
-      - WordApi
-      - DisconnectFunction
+    - WordApi
+    - DisconnectFunction
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref DisconnectFunction
+      FunctionName:
+        Ref: DisconnectFunction
       Principal: apigateway.amazonaws.com
-
-  # Defines a send word route
   SendWordRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref WordApi
+      ApiId:
+        Ref: WordApi
       RouteKey: sendWord
       AuthorizationType: NONE
       OperationName: SendWordRoute
-      Target: !Join
-        - "/"
-        - - "integrations"
-          - !Ref SendWordIntegration
-
-  # Defines an integration between the send word route and send word lambda
+      Target:
+        Fn::Join:
+        - /
+        - - integrations
+          - Ref: SendWordIntegration
   SendWordIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
-      ApiId: !Ref WordApi
+      ApiId:
+        Ref: WordApi
       IntegrationType: AWS_PROXY
       IntegrationUri:
         Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendWordFunction.Arn}/invocations
-
-  # Defines a lambda to be invoked on hitting the send word route
   SendWordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./dist/sendWord
+      CodeUri: s3://geoff-little-service/52338823f8ecf7809995b79637ba4345
       Handler: sendWord.default
       Runtime: nodejs8.10
       Environment:
         Variables:
-          CONNECTIONS_TABLE_NAME: !Ref ConnectionsTableName
+          CONNECTIONS_TABLE_NAME:
+            Ref: ConnectionsTableName
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ConnectionsTableName
-
-  # Defines permissions for executing the send word lambda
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTableName
   SendWordPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
-      - WordApi
-      - SendWordFunction
+    - WordApi
+    - SendWordFunction
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref SendWordFunction
+      FunctionName:
+        Ref: SendWordFunction
       Principal: apigateway.amazonaws.com
-
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-        - AttributeName: "connectionId"
-          AttributeType: "S"
+      - AttributeName: connectionId
+        AttributeType: S
       KeySchema:
-        - AttributeName: "connectionId"
-          KeyType: "HASH"
+      - AttributeName: connectionId
+        KeyType: HASH
       ProvisionedThroughput:
         ReadCapacityUnits: 1
         WriteCapacityUnits: 1
-      TableName: !Ref ConnectionsTableName
-
+      TableName:
+        Ref: ConnectionsTableName
   Deployment:
     Type: AWS::ApiGatewayV2::Deployment
     DependsOn:
-      - ConnectRoute
-      - DisconnectRoute
-      - SendWordRoute
+    - ConnectRoute
+    - DisconnectRoute
+    - SendWordRoute
     Properties:
-      ApiId: !Ref WordApi
-
+      ApiId:
+        Ref: WordApi
   Stage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
       StageName: v1
-      DeploymentId: !Ref Deployment
-      ApiId: !Ref WordApi
+      DeploymentId:
+        Ref: Deployment
+      ApiId:
+        Ref: WordApi
